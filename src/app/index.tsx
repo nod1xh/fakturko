@@ -1,98 +1,96 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+// Temporary screen: checks the Supabase connection. Replace in Phase 4.
+import { useEffect, useState } from "react";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { supabase } from "@/lib/supabase";
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
+// Colors from docs/pracenje-faktura.html (light theme)
+const colors = {
+  paper: "#E8ECE6",
+  ink: "#1A2530",
+  muted: "#5E6B73",
+  debt: "#B5452A",
+  debtSoft: "#F3DED6",
+  paid: "#2E6A4B",
+  paidSoft: "#D8E8DD",
+};
+
+type Status =
+  | { state: "loading" }
+  | { state: "ok" }
+  | { state: "error"; message: string };
+
+export default function Index() {
+  const [status, setStatus] = useState<Status>({ state: "loading" });
+
+  useEffect(() => {
+    async function checkConnection() {
+      // A reachable Supabase answers PGRST205 ("table not found") for a missing table.
+      const { error } = await supabase.from("veza_test_ne_postoji").select("*").limit(1);
+      if (error?.code === "PGRST205") {
+        setStatus({ state: "ok" });
+      } else if (error) {
+        setStatus({
+          state: "error",
+          message: `${error.code ? `[${error.code}] ` : ""}${error.message}`,
+        });
+      } else {
+        setStatus({ state: "error", message: "Neočekivan odgovor: tabela za test postoji." });
+      }
+    }
+    checkConnection().catch((e: unknown) =>
+      setStatus({ state: "error", message: e instanceof Error ? e.message : String(e) })
     );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+  }, []);
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+    <View style={styles.container}>
+      {status.state === "loading" && (
+        <>
+          <ActivityIndicator color={colors.ink} />
+          <Text style={styles.muted}>Provjeravam vezu sa Supabaseom…</Text>
+        </>
+      )}
+      {status.state === "ok" && (
+        <View style={[styles.card, { backgroundColor: colors.paidSoft, borderColor: colors.paid }]}>
+          <Text style={[styles.title, { color: colors.paid }]}>Veza sa Supabaseom radi</Text>
+        </View>
+      )}
+      {status.state === "error" && (
+        <View style={[styles.card, { backgroundColor: colors.debtSoft, borderColor: colors.debt }]}>
+          <Text style={[styles.title, { color: colors.debt }]}>Veza sa Supabaseom ne radi</Text>
+          <Text style={[styles.message, { color: colors.debt }]}>{status.message}</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    padding: 24,
+    backgroundColor: colors.paper,
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  card: {
+    width: "100%",
+    maxWidth: 420,
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
   },
   title: {
-    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: "600",
   },
-  code: {
-    textTransform: 'uppercase',
+  message: {
+    fontSize: 14,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  muted: {
+    color: colors.muted,
   },
 });
