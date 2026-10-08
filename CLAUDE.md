@@ -52,7 +52,7 @@ Invoices belong to a **company**, not a user. Users see companies through member
 | `fakture` | id, firma_id, dobavljac_id, broj, iznos numeric(12,2), datum_unosa date, rok_placanja date, placeno bool, datum_placanja date |
 
 **RLS (enabled on every table, no exceptions):**
-- Helper `is_member(firma_id)` (security definer) checks `clanstva` for `auth.uid()`.
+- Helper `private.is_member(firma_id)` (security definer, empty `search_path`) checks `clanstva` for `auth.uid()`. It lives in schema `private`, which is not exposed via the Data API, so it can't be called as an RPC.
 - `firme`: select only if `is_member(id)`.
 - `clanstva`: select own rows (`korisnik_id = auth.uid()`). No inserts from the app yet (members added manually in SQL).
 - `dobavljaci`, `fakture`: select/insert/update/delete only if `is_member(firma_id)`.
@@ -65,6 +65,9 @@ Invoices belong to a **company**, not a user. Users see companies through member
 - Dates stored as ISO `YYYY-MM-DD`, shown as `DD.MM.YYYY.`
 - "Overdue" / "due soon" (≤7 days) is computed in the app, never stored.
 - Marking paid sets `placeno = true` and `datum_placanja = today`; undo resets both.
+- `authenticated` has UPDATE only on specific columns. The app changes rows only with `.update()` containing just the allowed columns: never `upsert`, never the whole row.
+  - `dobavljaci`: `naziv`, `auto_rok_dana`
+  - `fakture`: `dobavljac_id`, `broj`, `iznos`, `datum_unosa`, `rok_placanja`, `placeno`, `datum_placanja`
 - Design follows `docs/pracenje-faktura.html`: same tabs, same checkbox-to-pay, same bottom sheets.
 - Never put the Supabase `service_role` / secret key in the app. Only the anon/publishable key, via `.env`.
 - Keep it simple: no extra libraries without a reason I agree to.
@@ -107,4 +110,5 @@ _Update as we go._
 - Supabase libraries installed, `src/lib/supabase.ts` done, `.env` git-ignored, `.env.example` added.
 - Connection test passed (green). `src/app/index.tsx` is still a TEMPORARY test screen (expects PGRST205). Replace in Phase 4.
 - GitHub: private repo `nod1xh/fakturko`, branch `main`, remote `origin`.
-- Next (Phase 3): first migration in `supabase/migrations/` with tables + RLS, then test company and 2 users.
+- Migrations applied manually in the SQL Editor (no Supabase CLI): `20261008000000_initial_schema.sql` (tables, checks, indexes, grants, RLS) and `20261008000100_move_is_member_to_private.sql`. Verified: RLS on all tables, 10 policies, no anon grants.
+- Next (Phase 3): test company + 2 users (added manually in SQL), then test RLS as a signed-in user.
