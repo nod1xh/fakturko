@@ -33,6 +33,9 @@ src/app/                Expo Router screens (file = route)
   (app)/[firmaId]/dobavljac/[id].tsx        Supplier: tabs Debts / Paid
 src/components/         Reusable UI (InvoiceRow, SupplierSheet, Toast…)
 src/lib/supabase.ts     Supabase client
+src/lib/auth.tsx        Session context (useAuth), signOut
+src/lib/errors.ts       Supabase errors → Bosnian messages
+src/lib/types.ts        Row types for DB tables
 src/lib/format.ts       Money and date helpers
 src/constants/theme.ts  Colors, fonts, spacing
 supabase/migrations/    SQL for tables + RLS (source of truth for the DB)
@@ -104,13 +107,19 @@ _Update as we go._
 - [ ] Phase 5 – Excel export, APK, Netlify deploy, install on both devices
 - [ ] Phase 6 – Test month and fixes
 
-**Now working on:** Phase 4
+**Now working on:** Phase 4, step 4.2 (suppliers list + supplier sheet)
+Phase 4 steps: 4.1 login ✅ · 4.2 suppliers · 4.3 supplier screen (tabs, pay checkbox, undo) · 4.4 invoice form + invoice menu · 4.5 dark-mode polish, loading/error states, Instrument fonts, Android test
 **Notes:**
 - Expo project created (`fakturko`), `reset-project` done, web runs in browser.
 - `app.json` web output changed to `"single"`.
 - Supabase project `fakturko` created (region: Central EU / Frankfurt).
 - Supabase libraries installed, `src/lib/supabase.ts` done, `.env` git-ignored, `.env.example` added.
-- Connection test passed (green). `src/app/index.tsx` is still a TEMPORARY test screen (expected PGRST205; now that tables exist and anon has no access, it gets a permission error instead). Replace in Phase 4.
+- Step 4.1 done, manually tested on web and Android (Expo Go):
+  - Auth: `src/lib/auth.tsx` (`useAuth`, `signOut` = this device only). Root `_layout.tsx` guards routes with `Stack.Protected`; splash stays until the stored session is read.
+  - Errors: always show messages from `src/lib/errors.ts` (`authErrorMessage`, `dataErrorMessage`), matched by `error.code` / error type, message text only as fallback.
+  - Theme: `useColors()` (follows system light/dark) + `spacing`, `radius`, `fontSize`, `fonts` from `src/constants/theme.ts`. System fonts for now (Instrument fonts planned for 4.5).
+  - Shared UI: `Button`, `TextField`. Row types in `src/lib/types.ts`.
+  - `src/app/(app)/index.tsx` is a TEMPORARY home (email, visible companies, sign out). Becomes "My companies" with auto-enter in 4.2.
 - GitHub: private repo `nod1xh/fakturko`, branch `main`, remote `origin`.
 - Migrations applied manually in the SQL Editor (no Supabase CLI): `20261008000000_initial_schema.sql` (tables, checks, indexes, grants, RLS) and `20261008000100_move_is_member_to_private.sql`. Verified: RLS on all tables, 10 policies, no anon grants.
 - Test users (Supabase Auth): `+vlasnik` and `+poslovodja` → Intermezo, `+uljez` → Test kafić (for isolation tests).
