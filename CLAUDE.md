@@ -36,6 +36,8 @@ src/lib/supabase.ts     Supabase client
 src/lib/format.ts       Money and date helpers
 src/constants/theme.ts  Colors, fonts, spacing
 supabase/migrations/    SQL for tables + RLS (source of truth for the DB)
+supabase/seed.sql       Test data (test DB only)
+supabase/tests/rls_test.sql   RLS + constraint tests (run after every migration)
 docs/intermezo-plan.md  Detailed plan
 docs/pracenje-faktura.html   Original HTML prototype (design reference)
 ```
@@ -97,18 +99,24 @@ _Update as we go._
 
 - [x] Phase 1 – Preparation (accounts: GitHub, Expo, Supabase, Netlify; questions for client)
 - [x] Phase 2 – Project setup (Expo + web, Supabase connected, GitHub repo)
-- [ ] Phase 3 – Database (tables, RLS, test company + 2 users)
+- [x] Phase 3 – Database (tables, RLS, test companies + 3 test users, RLS tests)
 - [ ] Phase 4 – Screens (login, companies, suppliers, supplier tabs, forms)
 - [ ] Phase 5 – Excel export, APK, Netlify deploy, install on both devices
 - [ ] Phase 6 – Test month and fixes
 
-**Now working on:** Phase 3
+**Now working on:** Phase 4
 **Notes:**
 - Expo project created (`fakturko`), `reset-project` done, web runs in browser.
 - `app.json` web output changed to `"single"`.
 - Supabase project `fakturko` created (region: Central EU / Frankfurt).
 - Supabase libraries installed, `src/lib/supabase.ts` done, `.env` git-ignored, `.env.example` added.
-- Connection test passed (green). `src/app/index.tsx` is still a TEMPORARY test screen (expects PGRST205). Replace in Phase 4.
+- Connection test passed (green). `src/app/index.tsx` is still a TEMPORARY test screen (expected PGRST205; now that tables exist and anon has no access, it gets a permission error instead). Replace in Phase 4.
 - GitHub: private repo `nod1xh/fakturko`, branch `main`, remote `origin`.
 - Migrations applied manually in the SQL Editor (no Supabase CLI): `20261008000000_initial_schema.sql` (tables, checks, indexes, grants, RLS) and `20261008000100_move_is_member_to_private.sql`. Verified: RLS on all tables, 10 policies, no anon grants.
-- Next (Phase 3): test company + 2 users (added manually in SQL), then test RLS as a signed-in user.
+- Test users (Supabase Auth): `+vlasnik` and `+poslovodja` → Intermezo, `+uljez` → Test kafić (for isolation tests).
+- `supabase/seed.sql` (test data) and `supabase/tests/rls_test.sql` (28 RLS/constraint tests, all PASS) are run manually: copy the whole file into SQL Editor → New query, replace the three `v_email_*` placeholders **only in the SQL Editor** (the committed files keep placeholders), nothing selected, Run.
+  - `seed.sql` runs once; it refuses to run twice and fails cleanly if an email is missing.
+  - `rls_test.sql` changes nothing (savepoints + final ROLLBACK) and returns one result table; every row must be PASS.
+- **Run `rls_test.sql` after every new migration.** Update its tests when the schema or RLS changes.
+- **Never run `seed.sql` on a database with real client data.** Test data only.
+- SQL Editor pitfall: a script with `CREATE TABLE` makes it offer "Run and enable RLS", which appends a statement at the end. Don't create helper tables in test scripts; for migrations always choose to run the query unchanged (our migrations enable RLS themselves).
