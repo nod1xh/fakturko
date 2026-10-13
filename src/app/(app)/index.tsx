@@ -1,135 +1,198 @@
-// TEMPORARY home screen (Phase 4, step 4.1): shows who is signed in and
-// which companies RLS lets them see. Replaced by "My companies" later.
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+// "Moje firme": always shown, also with one company (later: "Dodaj firmu").
+// Each company is a big card with its debt summary, like the prototype's home.
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { AccountMenu } from "@/components/AccountMenu";
 import { Button } from "@/components/Button";
-import { fonts, fontSize, maxContentWidth, radius, spacing, useColors } from "@/constants/theme";
-import { signOut, useAuth } from "@/lib/auth";
+import { Screen } from "@/components/Screen";
+import { BarButton, TopBar } from "@/components/TopBar";
+import { fonts, fontSize, radius, spacing, useColors } from "@/constants/theme";
 import { dataErrorMessage } from "@/lib/errors";
+import { isOverdue, money, plural, sumAmounts } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
-import { vrstaObjektaLabel, type Firma } from "@/lib/types";
+import { vrstaObjektaLabel, type Firma, type OtvorenaFaktura } from "@/lib/types";
+
+type FirmaSummary = Firma & {
+  supplierCount: number;
+  openCount: number;
+  overdueCount: number;
+  debt: number;
+};
 
 type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; firme: Firma[] };
+  | { status: "ready"; firme: FirmaSummary[] };
 
-export default function HomeScreen() {
+export default function MyCompaniesScreen() {
   const colors = useColors();
-  const { session } = useAuth();
+  const router = useRouter();
   const [state, setState] = useState<LoadState>({ status: "loading" });
-  const [signingOut, setSigningOut] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const load = useCallback(async () => {
-    setState({ status: "loading" });
-    const { data, error, status } = await supabase
-      .from("firme")
-      .select("id, naziv, vrsta_objekta")
-      .order("naziv");
-    if (error) {
-      setState({ status: "error", message: dataErrorMessage(error, status) });
-    } else {
-      setState({ status: "ready", firme: data as Firma[] });
+    // RLS returns only the companies (and their rows) the user is a member of.
+    const [firme, dobavljaci, fakture] = await Promise.all([
+      supabase.from("firme").select("id, naziv, vrsta_objekta"),
+      supabase.from("dobavljaci").select("firma_id"),
+      supabase
+        .from("fakture")
+        .select("firma_id, dobavljac_id, iznos, rok_placanja")
+        .eq("placeno", false),
+    ]);
+    const failed = [firme, dobavljaci, fakture].find((r) => r.error);
+    if (failed?.error) {
+      setState({ status: "error", message: dataErrorMessage(failed.error, failed.status) });
+      return;
     }
+
+    const open = (fakture.data ?? []) as OtvorenaFaktura[];
+    const supplierFirmIds = (dobavljaci.data ?? []).map((d) => d.firma_id as string);
+
+    const summaries = ((firme.data ?? []) as Firma[])
+      .map((firma) => {
+        const own = open.filter((f) => f.firma_id === firma.id);
+        return {
+          ...firma,
+          supplierCount: supplierFirmIds.filter((id) => id === firma.id).length,
+          openCount: own.length,
+          overdueCount: own.filter((f) => isOverdue(f.rok_placanja)).length,
+          debt: sumAmounts(own.map((f) => f.iznos)),
+        };
+      })
+      .sort((a, b) => a.naziv.localeCompare(b.naziv, "bs"));
+
+    setState({ status: "ready", firme: summaries });
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Reload every time the screen comes into view (e.g. back from a company).
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
-  async function handleSignOut() {
-    setSigningOut(true);
-    // The root layout sends us to the login screen once the session is gone.
-    await signOut();
+  async function refresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
   }
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.content}>
-          <Text style={[styles.heading, { color: colors.ink }]}>Moje firme</Text>
-          <Text style={[styles.muted, { color: colors.muted }]}>
-            Prijavljen kao <Text style={{ color: colors.ink }}>{session?.user.email}</Text>
-          </Text>
+    <Screen refreshing={refreshing} onRefresh={refresh}>
+      <TopBar
+        title="Moje firme"
+        right={<BarButton label="⋯" accessibilityLabel="Meni" onPress={() => setMenuOpen(true)} />}
+      />
 
-          <View style={styles.section}>
-            {state.status === "loading" && <ActivityIndicator color={colors.ink} />}
+      {state.status === "loading" && <ActivityIndicator color={colors.ink} style={styles.loading} />}
 
-            {state.status === "error" && (
-              <View style={[styles.box, { backgroundColor: colors.debtSoft, borderColor: colors.debt }]}>
-                <Text style={[styles.boxText, { color: colors.debt }]}>{state.message}</Text>
-                <Button title="Pokušaj ponovo" variant="ghost" onPress={load} />
-              </View>
-            )}
-
-            {state.status === "ready" && state.firme.length === 0 && (
-              <View style={[styles.box, styles.empty, { borderColor: colors.line }]}>
-                <Text style={[styles.muted, { color: colors.muted, textAlign: "center" }]}>
-                  Nemaš pristup nijednoj firmi.
-                </Text>
-              </View>
-            )}
-
-            {state.status === "ready" &&
-              state.firme.map((firma) => (
-                <View
-                  key={firma.id}
-                  style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}
-                >
-                  <Text style={[styles.cardTitle, { color: colors.ink }]}>{firma.naziv}</Text>
-                  <Text style={[styles.cardSub, { color: colors.muted }]}>
-                    {vrstaObjektaLabel[firma.vrsta_objekta] ?? firma.vrsta_objekta}
-                  </Text>
-                </View>
-              ))}
-          </View>
-
-          <Button title="Odjava" variant="ghost" onPress={handleSignOut} loading={signingOut} />
+      {state.status === "error" && (
+        <View style={[styles.box, { backgroundColor: colors.debtSoft, borderColor: colors.debt }]}>
+          <Text style={[styles.boxText, { color: colors.debt }]}>{state.message}</Text>
+          <Button title="Pokušaj ponovo" variant="ghost" onPress={load} />
         </View>
-      </ScrollView>
-    </SafeAreaView>
+      )}
+
+      {state.status === "ready" && state.firme.length === 0 && (
+        <View style={[styles.box, styles.empty, { borderColor: colors.line }]}>
+          <Text style={[styles.emptyText, { color: colors.muted }]}>
+            Nemaš pristup nijednoj firmi.
+          </Text>
+        </View>
+      )}
+
+      {state.status === "ready" && (
+        <View style={styles.list}>
+          {state.firme.map((firma) => (
+            <Pressable
+              key={firma.id}
+              accessibilityRole="button"
+              accessibilityLabel={`${firma.naziv}, dug ${money(firma.debt)}`}
+              onPress={() => router.push({ pathname: "/[firmaId]", params: { firmaId: firma.id } })}
+              style={({ pressed }) => [
+                styles.brand,
+                { backgroundColor: colors.ink },
+                pressed && { transform: [{ scale: 0.985 }] },
+              ]}
+            >
+              <Text style={[styles.brandType, { color: colors.btnInk }]}>
+                {vrstaObjektaLabel[firma.vrsta_objekta] ?? firma.vrsta_objekta}
+              </Text>
+              <Text style={[styles.brandName, { color: colors.btnInk }]}>{firma.naziv}</Text>
+              <View style={styles.brandMeta}>
+                <Text style={[styles.brandMetaText, { color: colors.btnInk }]}>
+                  {firma.supplierCount}{" "}
+                  {plural(firma.supplierCount, "dobavljač", "dobavljača", "dobavljača")}
+                </Text>
+                <Text style={[styles.brandDebt, { color: colors.btnInk }]}>{money(firma.debt)}</Text>
+              </View>
+              <Text style={[styles.brandSummary, { color: colors.btnInk }]}>
+                {summaryText(firma)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {menuOpen && <AccountMenu onClose={() => setMenuOpen(false)} />}
+    </Screen>
   );
 }
 
+function summaryText({ openCount, overdueCount }: FirmaSummary): string {
+  if (openCount === 0) return "Nema otvorenih dugovanja.";
+  const open = `Otvoreno: ${openCount} ${plural(openCount, "faktura", "fakture", "faktura")}`;
+  if (overdueCount === 0) return `${open}.`;
+  return `${open}, od toga ${overdueCount} ${plural(overdueCount, "kasni", "kasne", "kasni")} s plaćanjem.`;
+}
+
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
+  loading: {
+    marginTop: spacing.xl,
   },
-  scroll: {
-    padding: spacing.lg,
+  list: {
+    gap: spacing.md,
   },
-  content: {
-    width: "100%",
-    maxWidth: maxContentWidth,
-    alignSelf: "center",
+  brand: {
+    borderRadius: 28,
+    paddingTop: 26,
+    paddingHorizontal: 28,
+    paddingBottom: 24,
   },
-  heading: {
+  brandType: {
+    fontSize: fontSize.label,
+    opacity: 0.75,
+    marginBottom: spacing.xs,
+  },
+  brandName: {
     fontFamily: fonts.serif,
-    fontSize: fontSize.heading,
-    lineHeight: fontSize.heading * 1.1,
+    fontSize: fontSize.hero,
+    lineHeight: fontSize.hero * 1.05,
   },
-  muted: {
-    fontSize: fontSize.label,
-    marginTop: spacing.xs,
+  brandMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginTop: 22,
+    gap: spacing.md,
   },
-  section: {
-    marginVertical: spacing.xl,
-    gap: spacing.sm,
+  brandMetaText: {
+    fontSize: 15,
+    opacity: 0.85,
   },
-  card: {
-    borderWidth: 1,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-  },
-  cardTitle: {
-    fontSize: 17,
+  brandDebt: {
+    fontSize: 20,
     fontWeight: "600",
+    fontVariant: ["tabular-nums"],
   },
-  cardSub: {
+  brandSummary: {
     fontSize: fontSize.label,
-    marginTop: 2,
+    opacity: 0.85,
+    marginTop: spacing.sm,
   },
   box: {
     borderWidth: 1,
@@ -142,5 +205,9 @@ const styles = StyleSheet.create({
   },
   empty: {
     borderStyle: "dashed",
+  },
+  emptyText: {
+    fontSize: fontSize.body,
+    textAlign: "center",
   },
 });

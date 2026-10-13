@@ -18,6 +18,24 @@ export const messages = {
   noPermission: "Nemaš dozvolu za ovu radnju.",
   loginFailed: "Prijava nije uspjela. Pokušaj ponovo.",
   loadFailed: "Učitavanje nije uspjelo. Pokušaj ponovo.",
+  saveFailed: "Spremanje nije uspjelo. Pokušaj ponovo.",
+  deleteFailed: "Brisanje nije uspjelo. Pokušaj ponovo.",
+  duplicateSupplier: "Dobavljač s tim nazivom već postoji.",
+  supplierHasInvoices: "Dobavljač ima fakture i ne može se obrisati.",
+  supplierNotFound: "Dobavljač nije pronađen. Možda ga je neko obrisao.",
+};
+
+/** Postgres error codes the app reacts to. */
+export const pgCodes = {
+  uniqueViolation: "23505",
+  foreignKeyViolation: "23503",
+};
+
+type DataErrorOptions = {
+  /** Message when nothing more specific matches (default: loading failed). */
+  fallback?: string;
+  /** Screen-specific messages by error code, e.g. { "23505": "…" }. */
+  byCode?: Record<string, string>;
 };
 
 // Fetch failures: "Failed to fetch" (web), "Network request failed" (Android/iOS)
@@ -56,11 +74,17 @@ export function authErrorMessage(error: unknown): string {
 }
 
 /** Message for errors from database queries (supabase.from(...)). */
-export function dataErrorMessage(error: PostgrestError, status?: number): string {
+export function dataErrorMessage(
+  error: PostgrestError,
+  status?: number,
+  { fallback = messages.loadFailed, byCode = {} }: DataErrorOptions = {}
+): string {
   // Status 0 = request never reached the server
   if (status === 0) {
-    return NETWORK_TEXT.test(error.message) || !error.code ? messages.offline : messages.loadFailed;
+    return NETWORK_TEXT.test(error.message) || !error.code ? messages.offline : fallback;
   }
+
+  if (error.code && byCode[error.code]) return byCode[error.code];
 
   switch (error.code) {
     case "PGRST301": // JWT expired / invalid
@@ -69,9 +93,9 @@ export function dataErrorMessage(error: PostgrestError, status?: number): string
     case "42501": // no privilege / RLS violation
       return messages.noPermission;
   }
-  if (error.code) return messages.loadFailed;
+  if (error.code) return fallback;
 
   // Fallback: no code, look at the text
   if (NETWORK_TEXT.test(error.message)) return messages.offline;
-  return messages.loadFailed;
+  return fallback;
 }

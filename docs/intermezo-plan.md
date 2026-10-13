@@ -61,7 +61,7 @@ Pravila pristupa (RLS) u bazi: korisnik čita i mijenja samo redove firmi u koji
 
 Aplikacija ima četiri nivoa ekrana, a sav svakodnevni rad se dešava na ekranu dobavljača.
 
-Tok: Prijava → Moje firme (jedna firma: ulazi direktno) → Dobavljači → Dobavljač → tabovi Dugovanja i Plaćeno. Dugovanja → Unos fakture (broj, iznos, datum unosa, rok). Kvačica prebacuje fakturu u Plaćeno, „Poništi“ je vraća.
+Tok: Prijava → Moje firme (uvijek se prikazuje, i kad postoji samo jedna firma) → Dobavljači → Dobavljač → tabovi Dugovanja i Plaćeno. Dugovanja → Unos fakture (broj, iznos, datum unosa, rok). Kvačica prebacuje fakturu u Plaćeno, „Poništi“ je vraća.
 
 Prototip iz artifakta je polazna tačka za dizajn: isti tabovi, isti unos, ista kvačica za plaćanje. Novi su samo ekrani za prijavu i izbor firme.
 
@@ -72,7 +72,7 @@ Prva verzija radi tačno ono što je u bilješci, plus prijavu i izvoz podataka.
 **U prvoj verziji:**
 
 - Prijava emailom i lozinkom
-- Lista firmi; ko ima jednu firmu, ulazi direktno u nju
+- Moje firme: uvijek se prikazuje, i sa jednom firmom; svaka firma je kartica sa sažetkom duga
 - Dobavljači: dodavanje, uređivanje, automatski ili ručni rok plaćanja
 - Dugovanja: unos fakture (broj, iznos, datum unosa, rok plaćanja), oznaka da kasni ili uskoro dospijeva
 - Plaćeno: kvačica prebacuje fakturu sa datumom plaćanja, uz mogućnost poništavanja

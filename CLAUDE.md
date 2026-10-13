@@ -28,10 +28,10 @@ App code lives in `src/`; import with the `@/` alias (`@/lib/supabase`).
 ```
 src/app/                Expo Router screens (file = route)
   (auth)/login.tsx      Login
-  (app)/index.tsx       My companies (auto-enter if only one)
+  (app)/index.tsx       My companies: always shown (also with one company), big card per company with debt summary
   (app)/[firmaId]/index.tsx                 Suppliers list
   (app)/[firmaId]/dobavljac/[id].tsx        Supplier: tabs Debts / Paid
-src/components/         Reusable UI (InvoiceRow, SupplierSheet, Toast…)
+src/components/         Reusable UI (Button, TextField, BottomSheet, MenuSheet, TopBar, Screen, Toast, SupplierSheet…)
 src/lib/supabase.ts     Supabase client
 src/lib/auth.tsx        Session context (useAuth), signOut
 src/lib/errors.ts       Supabase errors → Bosnian messages
@@ -107,8 +107,8 @@ _Update as we go._
 - [ ] Phase 5 – Excel export, APK, Netlify deploy, install on both devices
 - [ ] Phase 6 – Test month and fixes
 
-**Now working on:** Phase 4, step 4.2 (suppliers list + supplier sheet)
-Phase 4 steps: 4.1 login ✅ · 4.2 suppliers · 4.3 supplier screen (tabs, pay checkbox, undo) · 4.4 invoice form + invoice menu · 4.5 dark-mode polish, loading/error states, Instrument fonts, Android test
+**Now working on:** Phase 4, step 4.3 (supplier screen: tabs, pay checkbox, undo)
+Phase 4 steps: 4.1 login ✅ · 4.2 suppliers ✅ · 4.3 supplier screen (tabs, pay checkbox, undo) · 4.4 invoice form + invoice menu · 4.5 dark-mode polish, loading/error states, Instrument fonts, Android test
 **Notes:**
 - Expo project created (`fakturko`), `reset-project` done, web runs in browser.
 - `app.json` web output changed to `"single"`.
@@ -119,7 +119,16 @@ Phase 4 steps: 4.1 login ✅ · 4.2 suppliers · 4.3 supplier screen (tabs, pay 
   - Errors: always show messages from `src/lib/errors.ts` (`authErrorMessage`, `dataErrorMessage`), matched by `error.code` / error type, message text only as fallback.
   - Theme: `useColors()` (follows system light/dark) + `spacing`, `radius`, `fontSize`, `fonts` from `src/constants/theme.ts`. System fonts for now (Instrument fonts planned for 4.5).
   - Shared UI: `Button`, `TextField`. Row types in `src/lib/types.ts`.
-  - `src/app/(app)/index.tsx` is a TEMPORARY home (email, visible companies, sign out). Becomes "My companies" with auto-enter in 4.2.
+- Step 4.2 done, manually tested on web and on **iPhone via Expo Go** (no Android device available). **Not yet verified on Android:** A3 (hardware back button closes an open sheet) and A7 (back button on suppliers list returns to "Moje firme"). Check them on the first Android test (at the latest with the APK in Phase 5).
+  - Navigation: "Moje firme" is **always** shown, never auto-enter into the only company (later: "Dodaj firmu" there). Suppliers screen always has a back arrow to "Moje firme". "Odjava" is in the `⋯` menu (`AccountMenu`) on both screens.
+  - Suppliers sorted alphabetically (`localeCompare(…, "bs")`). Debt per supplier/company is summed in the app from unpaid invoices (`sumAmounts`, exact to the cent).
+  - Screens reload on focus (`useFocusEffect`) and on pull-to-refresh, so data entered by the other user shows up.
+  - `Button`: if `onPress` returns a Promise, the button locks itself until it settles (no double saves). Use this for every save/delete button.
+  - `BottomSheet`: mount only while open (`{open && <Sheet/>}`), so forms start fresh.
+  - After `.update()` / `.delete()` always `.select()` and check that a row came back (RLS blocks silently with 0 rows).
+  - Supplier with invoices: the form shows "Dobavljač ima N faktura i ne može se obrisati" instead of "Obriši"; DB error 23503 is the backup.
+  - Route params are checked with `isUuid`; an invalid id redirects to "Moje firme".
+  - `src/app/(app)/[firmaId]/dobavljac/[id].tsx` is TEMPORARY (name, rule, invoice count, "Uredi"). Tabs come in 4.3.
 - GitHub: private repo `nod1xh/fakturko`, branch `main`, remote `origin`.
 - Migrations applied manually in the SQL Editor (no Supabase CLI): `20261008000000_initial_schema.sql` (tables, checks, indexes, grants, RLS) and `20261008000100_move_is_member_to_private.sql`. Verified: RLS on all tables, 10 policies, no anon grants.
 - Test users (Supabase Auth): `+vlasnik` and `+poslovodja` → Intermezo, `+uljez` → Test kafić (for isolation tests).

@@ -3,6 +3,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 
+import { ToastProvider } from "@/components/Toast";
 import { useColors } from "@/constants/theme";
 import { AuthProvider, useAuth } from "@/lib/auth";
 
@@ -33,7 +34,7 @@ function RootNavigator() {
   // Protected routes: when `guard` is false the screens are unreachable and
   // Expo Router redirects to the first available one.
   return (
-    <>
+    <ToastProvider>
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }}>
         <Stack.Protected guard={signedIn}>
@@ -43,6 +44,6 @@ function RootNavigator() {
           <Stack.Screen name="(auth)/login" />
         </Stack.Protected>
       </Stack>
-    </>
+    </ToastProvider>
   );
 }
