@@ -31,12 +31,13 @@ src/app/                Expo Router screens (file = route)
   (app)/index.tsx       My companies: always shown (also with one company), big card per company with debt summary
   (app)/[firmaId]/index.tsx                 Suppliers list
   (app)/[firmaId]/dobavljac/[id].tsx        Supplier: tabs Debts / Paid
-src/components/         Reusable UI (Button, TextField, BottomSheet, MenuSheet, TopBar, Screen, Toast, SupplierSheet…)
+src/components/         Reusable UI (Button, TextField, BottomSheet, MenuSheet, ConfirmSheet, TopBar, Screen, Toast, SupplierSheet, InvoiceRow…)
 src/lib/supabase.ts     Supabase client
 src/lib/auth.tsx        Session context (useAuth), signOut
 src/lib/errors.ts       Supabase errors → Bosnian messages
 src/lib/types.ts        Row types for DB tables
 src/lib/format.ts       Money and date helpers
+src/lib/useSupplierInvoices.ts   Supplier + invoices, optimistic mark paid / undo
 src/constants/theme.ts  Colors, fonts, spacing
 supabase/migrations/    SQL for tables + RLS (source of truth for the DB)
 supabase/seed.sql       Test data (test DB only)
@@ -69,7 +70,9 @@ Invoices belong to a **company**, not a user. Users see companies through member
 - Money in KM, 2 decimals, formatted with `bs-BA` locale: `1.234,50 KM`.
 - Dates stored as ISO `YYYY-MM-DD`, shown as `DD.MM.YYYY.`
 - "Overdue" / "due soon" (≤7 days) is computed in the app, never stored.
-- Marking paid sets `placeno = true` and `datum_placanja = today`; undo resets both.
+- Marking paid sets `placeno = true` and `datum_placanja = today` (LOCAL date, `todayIso()`); undo resets both.
+- **`datum_placanja` is never editable — not in any form, now or later.** Agreed with the client: an invoice is marked paid only when it is actually paid, so the payment date is always the day of the tap. Don't add a date picker for it, even if it looks like a missing feature.
+- Mark paid / undo is **optimistic** (`src/lib/useSupplierInvoices.ts`): shown immediately, saved in the background; saves for the same invoice run in a queue (last action wins); on failure the row returns to the last DB-confirmed state and an error toast is shown; a reload never overwrites an invoice that is still saving. Deleting is NOT optimistic (waits for the DB, after a confirm sheet).
 - `authenticated` has UPDATE only on specific columns. The app changes rows only with `.update()` containing just the allowed columns: never `upsert`, never the whole row.
   - `dobavljaci`: `naziv`, `auto_rok_dana`
   - `fakture`: `dobavljac_id`, `broj`, `iznos`, `datum_unosa`, `rok_placanja`, `placeno`, `datum_placanja`
@@ -107,8 +110,8 @@ _Update as we go._
 - [ ] Phase 5 – Excel export, APK, Netlify deploy, install on both devices
 - [ ] Phase 6 – Test month and fixes
 
-**Now working on:** Phase 4, step 4.3 (supplier screen: tabs, pay checkbox, undo)
-Phase 4 steps: 4.1 login ✅ · 4.2 suppliers ✅ · 4.3 supplier screen (tabs, pay checkbox, undo) · 4.4 invoice form + invoice menu · 4.5 dark-mode polish, loading/error states, Instrument fonts, Android test
+**Now working on:** Phase 4, step 4.4 (invoice form + invoice menu)
+Phase 4 steps: 4.1 login ✅ · 4.2 suppliers ✅ · 4.3 supplier screen (tabs, pay checkbox, undo) ✅ · 4.4 invoice form + invoice menu · 4.5 dark-mode polish, loading/error states, Instrument fonts, Android test
 **Notes:**
 - Expo project created (`fakturko`), `reset-project` done, web runs in browser.
 - `app.json` web output changed to `"single"`.
@@ -128,7 +131,7 @@ Phase 4 steps: 4.1 login ✅ · 4.2 suppliers ✅ · 4.3 supplier screen (tabs, 
   - After `.update()` / `.delete()` always `.select()` and check that a row came back (RLS blocks silently with 0 rows).
   - Supplier with invoices: the form shows "Dobavljač ima N faktura i ne može se obrisati" instead of "Obriši"; DB error 23503 is the backup.
   - Route params are checked with `isUuid`; an invalid id redirects to "Moje firme".
-  - `src/app/(app)/[firmaId]/dobavljac/[id].tsx` is TEMPORARY (name, rule, invoice count, "Uredi"). Tabs come in 4.3.
+- Step 4.3 done, manually tested on web (incl. slow 3G, offline save error, invoice deleted by another user), iPhone via Expo Go and Safari on iPhone: real supplier screen — summary cards (Dugovanja / Plaćeno, paid total is all-time for now), tabs with counts, `InvoiceRow` (flags "Kasni N dana" / "Dospijeva danas" / "Dospijeva za N dana" ≤7, red border when overdue), pay checkbox + toast "Poništi" (5 s), invoice `⋯` menu (pay/undo, delete with confirm). "Dodaj fakturu" only shows a "Dolazi uskoro" toast until 4.4.
 - GitHub: private repo `nod1xh/fakturko`, branch `main`, remote `origin`.
 - Migrations applied manually in the SQL Editor (no Supabase CLI): `20261008000000_initial_schema.sql` (tables, checks, indexes, grants, RLS) and `20261008000100_move_is_member_to_private.sql`. Verified: RLS on all tables, 10 policies, no anon grants.
 - Test users (Supabase Auth): `+vlasnik` and `+poslovodja` → Intermezo, `+uljez` → Test kafić (for isolation tests).

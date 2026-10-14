@@ -23,6 +23,7 @@ export const messages = {
   duplicateSupplier: "Dobavljač s tim nazivom već postoji.",
   supplierHasInvoices: "Dobavljač ima fakture i ne može se obrisati.",
   supplierNotFound: "Dobavljač nije pronađen. Možda ga je neko obrisao.",
+  invoiceNotFound: "Faktura nije pronađena. Možda ju je neko obrisao.",
 };
 
 /** Postgres error codes the app reacts to. */

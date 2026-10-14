@@ -7,8 +7,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fontSize, radius, spacing, useColors } from "@/constants/theme";
 
 type ToastAction = { label: string; onPress: () => void };
+type ToastOptions = {
+  action?: ToastAction;
+  /** Milliseconds; default 5000 with an action, otherwise 2500 */
+  duration?: number;
+};
 type ToastState = { id: number; message: string; action?: ToastAction };
-type ShowToast = (message: string, action?: ToastAction) => void;
+type ShowToast = (message: string, options?: ToastOptions) => void;
 
 const ToastContext = createContext<ShowToast>(() => {});
 
@@ -18,11 +23,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ToastState | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const show = useCallback<ShowToast>((message, action) => {
+  const show = useCallback<ShowToast>((message, { action, duration } = {}) => {
     if (timer.current) clearTimeout(timer.current);
     setToast({ id: Date.now(), message, action });
     // Longer when there is something to undo
-    timer.current = setTimeout(() => setToast(null), action ? 5000 : 2500);
+    timer.current = setTimeout(() => setToast(null), duration ?? (action ? 5000 : 2500));
   }, []);
 
   useEffect(() => () => {
@@ -68,7 +73,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** const toast = useToast(); toast("Dobavljač dodan"); */
+/**
+ * const toast = useToast();
+ * toast("Dobavljač dodan");
+ * toast("Prebačeno u Plaćeno", { action: { label: "Poništi", onPress: undo } });
+ */
 export function useToast(): ShowToast {
   return useContext(ToastContext);
 }
