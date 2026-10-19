@@ -24,12 +24,40 @@ export const messages = {
   supplierHasInvoices: "Dobavljač ima fakture i ne može se obrisati.",
   supplierNotFound: "Dobavljač nije pronađen. Možda ga je neko obrisao.",
   invoiceNotFound: "Faktura nije pronađena. Možda ju je neko obrisao.",
+  amountTooLarge: "Iznos je prevelik.",
 };
+
+/**
+ * Messages by constraint name (names set in migration
+ * 20261014000000_name_constraints.sql). Foreign keys are not here: the same
+ * key means different things on insert and on delete, so screens pass
+ * those messages via `byCode`.
+ */
+const constraintMessages: Record<string, string> = {
+  fakture_iznos_nije_negativan: "Iznos ne smije biti negativan.",
+  fakture_broj_nije_prazan: "Upiši broj fakture.",
+  fakture_rok_nije_prije_unosa: "Rok plaćanja ne može biti prije datuma unosa.",
+  fakture_placeno_ima_datum: "Plaćena faktura mora imati datum plaćanja.",
+  dobavljaci_naziv_nije_prazan: "Upiši naziv dobavljača.",
+  dobavljaci_auto_rok_raspon: "Broj dana mora biti cijeli broj od 0 do 365.",
+  dobavljaci_firma_naziv_key: messages.duplicateSupplier,
+};
+
+/**
+ * PostgREST has no separate field for the constraint name; it is only in
+ * the message: … violates check constraint "fakture_iznos_nije_negativan".
+ * We read just that quoted name (which we chose), not the English text.
+ */
+export function constraintName(error: PostgrestError): string | null {
+  return /constraint "([^"]+)"/.exec(error.message)?.[1] ?? null;
+}
 
 /** Postgres error codes the app reacts to. */
 export const pgCodes = {
   uniqueViolation: "23505",
   foreignKeyViolation: "23503",
+  checkViolation: "23514",
+  numericOverflow: "22003",
 };
 
 type DataErrorOptions = {
@@ -86,6 +114,11 @@ export function dataErrorMessage(
   }
 
   if (error.code && byCode[error.code]) return byCode[error.code];
+
+  if (error.code === pgCodes.checkViolation || error.code === pgCodes.uniqueViolation) {
+    const name = constraintName(error);
+    if (name && constraintMessages[name]) return constraintMessages[name];
+  }
 
   switch (error.code) {
     case "PGRST301": // JWT expired / invalid

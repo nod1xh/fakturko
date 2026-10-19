@@ -1,6 +1,7 @@
 import type { Ref } from "react";
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 
+import { useFormFocus } from "@/components/FormFocus";
 import { fontSize, radius, spacing, useColors } from "@/constants/theme";
 
 type Props = TextInputProps & {
@@ -9,8 +10,9 @@ type Props = TextInputProps & {
 };
 
 /** Labeled text input styled like the prototype's form fields. */
-export function TextField({ label, style, ref, ...inputProps }: Props) {
+export function TextField({ label, style, ref, onFocus, ...inputProps }: Props) {
   const colors = useColors();
+  const focus = useFormFocus();
 
   return (
     <View style={styles.field}>
@@ -24,6 +26,11 @@ export function TextField({ label, style, ref, ...inputProps }: Props) {
           style,
         ]}
         {...inputProps}
+        onFocus={(event) => {
+          // Typing in a field closes an open date picker of the same form
+          focus?.setActiveId(null);
+          onFocus?.(event);
+        }}
       />
     </View>
   );

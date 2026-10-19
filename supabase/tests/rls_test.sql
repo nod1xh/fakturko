@@ -15,7 +15,9 @@
 -- which appends a statement after ROLLBACK and fails.)
 --
 -- Result: one table (nr, test, ocekivano, dobijeno, rezultat).
--- Expected errors are written as "greška <SQLSTATE>":
+-- Expected errors are written as "greška <SQLSTATE>", or with a constraint
+-- name as a LIKE pattern: 'greška 23514:%"fakture_iznos_nije_negativan"%'
+-- (names from migration 20261014000000_name_constraints.sql):
 --   42501 = no privilege / RLS policy violation
 --   23514 = check constraint violation
 --   23503 = foreign key violation
@@ -69,7 +71,8 @@ begin
            'dobijeno',  v_dobijeno,
            'rezultat',  case
                           when v_dobijeno = p_ocekivano
-                            or v_dobijeno like p_ocekivano || ':%' then 'PASS'
+                            or v_dobijeno like p_ocekivano || ':%'
+                            or (p_ocekivano like '%\%%' and v_dobijeno like p_ocekivano) then 'PASS'
                           else 'FAIL'
                         end
          )
@@ -172,7 +175,8 @@ begin
     format($q$with x as (
       insert into public.fakture (firma_id, dobavljac_id, broj, iznos, rok_placanja)
       values (%L, %L, 'TEST-2', 10, current_date + 10) returning 1
-    ) select count(*)::text from x$q$, v_test_kafic, v_pica), 'greška 23503');
+    ) select count(*)::text from x$q$, v_test_kafic, v_pica),
+    'greška 23503:%"fakture_dobavljac_iz_iste_firme"%');
 
   -- 5. Owner: no foreign unio_korisnik_id, no moving to another company ------
   perform pg_temp.run_test(501, '5a Vlasnik: unos fakture sa tuđim unio_korisnik_id', 'authenticated', v_vlasnik,
@@ -208,24 +212,28 @@ begin
     format($q$with x as (
       insert into public.fakture (firma_id, dobavljac_id, broj, iznos, rok_placanja)
       values (%L, %L, 'TEST-5', -5, current_date + 10) returning 1
-    ) select count(*)::text from x$q$, v_intermezo, v_pica), 'greška 23514');
+    ) select count(*)::text from x$q$, v_intermezo, v_pica),
+    'greška 23514:%"fakture_iznos_nije_negativan"%');
 
   perform pg_temp.run_test(602, '6b Rok prije datuma unosa', 'authenticated', v_vlasnik,
     format($q$with x as (
       insert into public.fakture (firma_id, dobavljac_id, broj, iznos, datum_unosa, rok_placanja)
       values (%L, %L, 'TEST-6', 10, current_date, current_date - 1) returning 1
-    ) select count(*)::text from x$q$, v_intermezo, v_pica), 'greška 23514');
+    ) select count(*)::text from x$q$, v_intermezo, v_pica),
+    'greška 23514:%"fakture_rok_nije_prije_unosa"%');
 
   perform pg_temp.run_test(603, '6c Plaćeno bez datuma plaćanja', 'authenticated', v_vlasnik,
     format($q$with x as (
       insert into public.fakture (firma_id, dobavljac_id, broj, iznos, rok_placanja, placeno, datum_placanja)
       values (%L, %L, 'TEST-7', 10, current_date + 10, true, null) returning 1
-    ) select count(*)::text from x$q$, v_intermezo, v_pica), 'greška 23514');
+    ) select count(*)::text from x$q$, v_intermezo, v_pica),
+    'greška 23514:%"fakture_placeno_ima_datum"%');
 
   perform pg_temp.run_test(604, '6d Brisanje dobavljača koji ima fakture', 'authenticated', v_vlasnik,
     format($q$with x as (
       delete from public.dobavljaci where id = %L returning 1
-    ) select count(*)::text from x$q$, v_pica), 'greška 23503');
+    ) select count(*)::text from x$q$, v_pica),
+    'greška 23503:%"fakture_dobavljac_iz_iste_firme"%');
 
   -- 7. Anonymous (not signed in): no access to tables ------------------------
   perform pg_temp.run_test(701, '7a Anon: firme',      'anon', null, $q$select count(*)::text from public.firme$q$,      v_rls);

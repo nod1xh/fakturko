@@ -7,6 +7,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { Button } from "@/components/Button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { InvoiceRow } from "@/components/InvoiceRow";
+import { InvoiceSheet } from "@/components/InvoiceSheet";
 import { MenuSheet } from "@/components/MenuSheet";
 import { Screen } from "@/components/Screen";
 import { SupplierSheet } from "@/components/SupplierSheet";
@@ -37,7 +38,7 @@ function SupplierView({ firmaId, supplierId }: { firmaId: string; supplierId: st
     (message: string) => toast(message, { duration: ERROR_TOAST_MS }),
     [toast]
   );
-  const { status, supplier, setSupplier, invoices, load, setPaid, restore, deleteInvoice } =
+  const { status, supplier, setSupplier, invoices, load, setPaid, restore, deleteInvoice, upsertInvoice } =
     useSupplierInvoices(firmaId, supplierId, showError);
 
   const [tab, setTab] = useState<Tab>("debt");
@@ -45,6 +46,8 @@ function SupplierView({ firmaId, supplierId }: { firmaId: string; supplierId: st
   const [editOpen, setEditOpen] = useState(false);
   const [menuFor, setMenuFor] = useState<Faktura | null>(null);
   const [deleteFor, setDeleteFor] = useState<Faktura | null>(null);
+  // null = closed; { invoice: undefined } = new invoice; { invoice } = edit
+  const [invoiceForm, setInvoiceForm] = useState<{ invoice?: Faktura } | null>(null);
 
   // Reload every time the screen comes into view.
   useFocusEffect(
@@ -165,8 +168,7 @@ function SupplierView({ firmaId, supplierId }: { firmaId: string; supplierId: st
 
           {tab === "debt" && (
             <View style={styles.addButton}>
-              {/* The invoice form comes in step 4.4 */}
-              <Button title="Dodaj fakturu" onPress={() => toast("Dolazi uskoro")} />
+              <Button title="Dodaj fakturu" onPress={() => setInvoiceForm({})} />
             </View>
           )}
         </>
@@ -182,6 +184,13 @@ function SupplierView({ firmaId, supplierId }: { firmaId: string; supplierId: st
               onPress: () => {
                 setMenuFor(null);
                 togglePaid(menuFor);
+              },
+            },
+            {
+              label: "Uredi fakturu",
+              onPress: () => {
+                setMenuFor(null);
+                setInvoiceForm({ invoice: menuFor });
               },
             },
             {
@@ -209,6 +218,20 @@ function SupplierView({ firmaId, supplierId }: { firmaId: string; supplierId: st
               toast("Faktura obrisana");
             }
             return error;
+          }}
+        />
+      )}
+
+      {invoiceForm && supplier && (
+        <InvoiceSheet
+          supplier={supplier}
+          invoice={invoiceForm.invoice}
+          onClose={() => setInvoiceForm(null)}
+          onSaved={(saved) => {
+            const isNew = !invoiceForm.invoice;
+            setInvoiceForm(null);
+            upsertInvoice(saved);
+            toast(isNew ? "Faktura dodana" : "Izmjene spremljene");
           }}
         />
       )}

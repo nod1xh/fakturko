@@ -2,9 +2,13 @@
 // bottom. Closes on scrim tap, Android back button and Esc on web.
 // Mount it only while open ({open && <BottomSheet …/>}), so forms inside
 // start fresh every time.
+// Tapping an empty part of the sheet closes the keyboard and an open
+// date field (see FormFocus).
 import type { ReactNode } from "react";
-import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { FormFocusProvider, useFormFocus } from "@/components/FormFocus";
 
 import { fonts, maxContentWidth, radius, spacing, useColors } from "@/constants/theme";
 
@@ -14,9 +18,23 @@ type Props = {
   children: ReactNode;
 };
 
-export function BottomSheet({ title, onClose, children }: Props) {
+export function BottomSheet(props: Props) {
+  return (
+    <FormFocusProvider>
+      <SheetContent {...props} />
+    </FormFocusProvider>
+  );
+}
+
+function SheetContent({ title, onClose, children }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const focus = useFormFocus();
+
+  function closeOpenFields() {
+    focus?.setActiveId(null);
+    Keyboard.dismiss();
+  }
 
   return (
     <Modal
@@ -43,10 +61,13 @@ export function BottomSheet({ title, onClose, children }: Props) {
           ]}
         >
           <ScrollView keyboardShouldPersistTaps="handled" bounces={false}>
-            <Text style={[styles.title, { color: colors.ink }]} accessibilityRole="header">
-              {title}
-            </Text>
-            {children}
+            {/* Taps on fields and buttons are handled by them; taps on empty space land here */}
+            <Pressable onPress={closeOpenFields} accessible={false} style={styles.body}>
+              <Text style={[styles.title, { color: colors.ink }]} accessibilityRole="header">
+                {title}
+              </Text>
+              {children}
+            </Pressable>
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -72,6 +93,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.sheet,
     paddingTop: spacing.xl,
     paddingHorizontal: 18,
+  },
+  body: {
+    cursor: "auto",
   },
   title: {
     fontFamily: fonts.serif,

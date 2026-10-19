@@ -15,7 +15,7 @@ import { supabase } from "@/lib/supabase";
 import type { Dobavljac, Faktura, PaymentState } from "@/lib/types";
 
 const SUPPLIER_COLUMNS = "id, firma_id, naziv, auto_rok_dana";
-const INVOICE_COLUMNS =
+export const INVOICE_COLUMNS =
   "id, firma_id, dobavljac_id, broj, iznos, datum_unosa, rok_placanja, placeno, datum_placanja";
 
 export type LoadStatus =
@@ -156,6 +156,26 @@ export function useSupplierInvoices(
     [applyPayment]
   );
 
+  /**
+   * After the invoice form saved: adds a new invoice or replaces an edited one.
+   * If a payment change of that invoice is still saving, its payment fields
+   * stay as the user sees them.
+   */
+  const upsertInvoice = useCallback((row: Faktura) => {
+    const saving = (pending.current.get(row.id) ?? 0) > 0;
+    if (!saving) {
+      confirmed.current.set(row.id, { placeno: row.placeno, datum_placanja: row.datum_placanja });
+    }
+    setInvoices((list) => {
+      const local = list.find((f) => f.id === row.id);
+      if (!local) return [...list, row];
+      const merged = saving
+        ? { ...row, placeno: local.placeno, datum_placanja: local.datum_placanja }
+        : row;
+      return list.map((f) => (f.id === row.id ? merged : f));
+    });
+  }, []);
+
   /** Waits for the database (not optimistic). Returns an error message or null. */
   const deleteInvoice = useCallback(async (invoice: Faktura): Promise<string | null> => {
     const { data, error, status: httpStatus } = await supabase
@@ -171,5 +191,5 @@ export function useSupplierInvoices(
     return null;
   }, []);
 
-  return { status, supplier, setSupplier, invoices, load, setPaid, restore, deleteInvoice };
+  return { status, supplier, setSupplier, invoices, load, setPaid, restore, deleteInvoice, upsertInvoice };
 }
